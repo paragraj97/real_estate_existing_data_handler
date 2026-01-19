@@ -1,0 +1,10 @@
+
+/.idea
+migration.sql
+*.pyc
+/ongoing
+s3_transfer.log
+unsuccessful_ips.txt
+unsuccessful_ips_v1.txt
+successful_ips.txt
+successful_ips_v1.txt

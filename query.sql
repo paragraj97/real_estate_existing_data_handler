@@ -13,92 +13,41 @@ CREATE TYPE real_estate_enm AS ENUM (
 );
 
 
+CREATE TABLE public.tblongoingdocno (
+    intongoingid BIGSERIAL PRIMARY KEY,
 
-/*---------------------------------------------------------
-  2) MAIN TABLE: Tblongoingdocno
-----------------------------------------------------------*/
-CREATE TABLE Tblongoingdocno (
+    chrdistrict varchar NULL,
+    chrsro varchar NULL,
+    intstartrange int8 NULL,
+    intendrange int8 NULL,
+    intmaxrange int8 NULL,
+    chryear text NULL,
 
-    /*---------------------------------------------------------
-        Primary Key (Artificial/Surrogate Key)
-        Auto-incrementing unique ID for each record
-    ----------------------------------------------------------*/
-    intid BIGSERIAL PRIMARY KEY,
+    enmstatus public.real_estate_enm DEFAULT 'Not Started'::real_estate_enm NULL,
+    chrip text NULL,
 
-    /*---------------------------------------------------------
-        intongoingid:
-        - Mapped from sub_dir_id in your insert data
-        - Unique identifier for each year-range batch
-    ----------------------------------------------------------*/
-    intongoingid BIGINT,
+    dtmaddedon timestamp DEFAULT now() NULL,
+    dtmupdatedon timestamp DEFAULT now() NULL,
+    dtmlastrunon timestamp NULL,
 
-    /*---------------------------------------------------------
-        chrdistrict:
-        - District name (e.g., मुंबई_जिल्हा)
-    ----------------------------------------------------------*/
-    chrdistrict VARCHAR,
+    intintervalhours numeric NULL,
+    dtmcompletedwebhookreceivedon timestamp NULL,
+    dtmlastcompletionattempted timestamp NULL,
+    intcompletedattempt int4 NULL,
 
-    /*---------------------------------------------------------
-        chrsro:
-        - Sub Registrar Office name
-        - Example: 'Joint_S.R._Mumbai_1_(Mumbai_City_1_(Fort))'
-    ----------------------------------------------------------*/
-    chrsro VARCHAR,
+    dtm_startedon timestamp NULL,
+    intcrawlingattempted int4 NULL,
+    dtmlastcrawlingattempted timestamp NULL,
 
-    /*---------------------------------------------------------
-        intstartrange / intendrange:
-        - Document number range (Start → End)
-        - Example: 1 to 2000, 2001 to 4000, etc.
-    ----------------------------------------------------------*/
-    intstartrange BIGINT,
-    intendrange BIGINT,
+    chrthreadname text NULL,
+    dtmextractedon timestamp NULL,
+    dtmcnrgeneratedon timestamp NULL,
+    dtmdestroyedon timestamp NULL,
+    dtmfolderretrievedon timestamp NULL,
+    dtmextractionstartedon timestamp NULL,
 
-    /*---------------------------------------------------------
-        chryear:
-        - Document registration year (e.g., 2009, 2010, 2011)
-    ----------------------------------------------------------*/
-    chryear TEXT,
-
-    /*---------------------------------------------------------
-        enmstatus:
-        - Processing status of the document range
-        - Uses ENUM real_estate_enm defined above
-        - Default = 'Not Started'
-    ----------------------------------------------------------*/
-    enmstatus real_estate_enm DEFAULT 'Not Started',
-
-    /*---------------------------------------------------------
-        chrip:
-        - System/server IP address (if applicable)
-    ----------------------------------------------------------*/
-    chrip TEXT,
-
-    /*---------------------------------------------------------
-        Timestamps
-        All default to NOW()
-        These track processing lifecycle of each document range
-    ----------------------------------------------------------*/
-    dtmaddedon TIMESTAMP DEFAULT NOW(),                   -- When added
-    dtmupdatedon TIMESTAMP DEFAULT NOW(),                 -- When last updated
-    dtmlastrunon TIMESTAMP DEFAULT NOW(),                 -- Last execution time
-    intintervalhours NUMERIC,                             -- Interval between runs (hours)
-
-    dtmcompletedwebhookreceivedon TIMESTAMP DEFAULT NOW(), -- When webhook result received
-    dtmlastcompletionattempted TIMESTAMP DEFAULT NOW(),    -- When last completion attempt happened
-    intcompletedattempt INTEGER,                           -- How many times completion was attempted
-
-    dtm_startedon TIMESTAMP DEFAULT NOW(),                 -- Processing start timestamp
-    intcrawlingattempted INTEGER,                          -- Crawling attempt count
-    dtmlastcrawlingattempted TIMESTAMP DEFAULT NOW(),      -- Last crawling attempt timestamp
-
-    chrthreadname TEXT,                                    -- Worker/thread name handling this job
-    dtmextractedon TIMESTAMP DEFAULT NOW(),                -- Extraction completed timestamp
-    dtmcnrgeneratedon TIMESTAMP DEFAULT NOW(),             -- CNR generated timestamp
-    dtmdestroyedon TIMESTAMP DEFAULT NOW(),                -- Destroyed timestamp (if deleted)
-    dtmfolderretrievedon TIMESTAMP DEFAULT NOW(),          -- Folder retrieved timestamp
-    dtmextractionstartedon TIMESTAMP DEFAULT NOW()         -- Extraction started timestamp
+    chrdistrictenglish varchar NULL
 );
-
 
 
 
@@ -135,7 +84,7 @@ CREATE TYPE re_extraction_status_enum AS ENUM (
 --  TABLE: Tblongoingdocnorecords
 -- ============================================
 
-CREATE TABLE Tblongoingdocnorecords (
+CREATE TABLE tblongoingdocnorecords (
     -- Auto-increment primary key
     intid BIGSERIAL PRIMARY KEY,                        -- internal record id
 
