@@ -6,10 +6,25 @@ import time
 import logging
 import datetime
 import traceback
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from dotenv import load_dotenv
 
+# Load environment variables
+load_dotenv()
+
+# Database configuration
+DB_CONFIG = {
+    'host': os.getenv('DB_HOST', 'localhost'),
+    'port': os.getenv('DB_PORT', '5432'),
+    'database': os.getenv('DB_NAME'),
+    'user': os.getenv('DB_USER'),
+    'password': os.getenv('DB_PASSWORD')
+}
 
 DISTRICT_MAP = {
     "मुंबई_जिल्हा": "Mumbai_District",
+    "मुंबई जिल्हा": "Mumbai_District",
 }
 
 def map_district(d):
@@ -60,8 +75,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class S3Transfer:
-    def __init__(self, bucket_name, dry_run=False):
+    def __init__(self, bucket_name, db_conn=None, dry_run=False):
         self.bucket_name = bucket_name
+        self.db_conn = db_conn
         self.dry_run = dry_run
         # Only initialize client if not in dry_run mode to avoid credential errors during testing
 
@@ -154,8 +170,8 @@ class S3Transfer:
 
         Args:
             folder_path (str): Local folder path to transfer
-            cnr_no (str): CNR number
-            do_id (str): Data Order ID
+            diary_no (str): Diary number (folder name)
+            do_id (str): Data Order ID (intongoingid)
 
         Returns:
             tuple: (success: bool, s3_base_path: str, s3_html_file_path: str)
@@ -163,18 +179,38 @@ class S3Transfer:
         try:
             folder_name = os.path.basename(folder_path)
 
-            # Parse components to get district, sro, year
-            # We use the folder name itself to parse metadata
-            meta = parse_folder_name(folder_name)
-            if not meta:
-                logger.error("Failed to parse folder name components for: %s", folder_name)
-                return False, None, None, None
-
-            # district = meta['dist']
-            district = map_district(meta["dist"])
-            sro = meta['sro']
-            year = meta['year']
-
+            # Query database to get district, sro, year using do_id (intongoingid)
+            if not self.db_conn:
+                logger.error("Database connection not provided to S3Transfer")
+                return False, None, None
+            
+            cursor = self.db_conn.cursor(cursor_factory=RealDictCursor)
+            
+            query = """
+                SELECT chrdistrict, chrsro, chryear 
+                FROM tblongoingdocno 
+                WHERE intongoingid = %s
+                LIMIT 1
+            """
+            
+            cursor.execute(query, (do_id,))
+            result = cursor.fetchone()
+            cursor.close()
+            
+            if not result:
+                logger.error(f"No metadata found in tblongoingdocno for intongoingid: {do_id}")
+                return False, None, None
+            
+            # Extract metadata from database
+            district_raw = result['chrdistrict']
+            sro_raw = result['chrsro']
+            year = result['chryear']
+            
+            # Map district for S3 path and convert SRO spaces to underscores
+            district = map_district(district_raw)
+            sro = sro_raw.replace(" ", "_")
+            
+            logger.info(f"Retrieved metadata from DB for do_id {do_id}: district={district}, sro={sro}, year={year}")
 
             s3_base_path = f"s3://calyso/marshaltestrealestate/{district}/{sro}/{year}/{do_id}/{folder_name}/"
             print("Starting S3 transfer for CNR %s to path: %s", diary_no, s3_base_path)
@@ -242,6 +278,7 @@ class S3Transfer:
             return False, None, None
 
 
+
 def main():
     SOURCE_DIR = "/home/caypro/Documents/real_estate_existing_data_handler/ongoing"
     BUCKET_NAME = "calyso"
@@ -250,7 +287,17 @@ def main():
         print(f"Source directory not found: {SOURCE_DIR}")
         return
 
-    uploader = S3Transfer(BUCKET_NAME)
+    # Establish database connection
+    try:
+        db_conn = psycopg2.connect(**DB_CONFIG)
+        logger.info("Database connection established successfully")
+    except Exception as e:
+        logger.error(f"Failed to connect to database: {e}")
+        logger.error("Cannot proceed without database connection. Exiting.")
+        return
+
+    # Create S3Transfer instance with database connection
+    uploader = S3Transfer(BUCKET_NAME, db_conn=db_conn)
     
     # Iterate through do_id folders (1, 2, 3...)
     try:
@@ -281,6 +328,10 @@ def main():
                 print(f"[SUCCESS] {case_folder} -> {s3_path}")
             else:
                 print(f"[FAILED] {case_folder}")
+    
+    # Close database connection
+    db_conn.close()
+    logger.info("Database connection closed")
 
 if __name__ == "__main__":
     main()
