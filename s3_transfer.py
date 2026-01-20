@@ -187,7 +187,7 @@ class S3Transfer:
             cursor = self.db_conn.cursor(cursor_factory=RealDictCursor)
             
             query = """
-                SELECT chrdistrict, chrsro, chryear 
+                SELECT chrdistrict, chrdistrictenglish, chrsro, chryear 
                 FROM tblongoingdocno 
                 WHERE intongoingid = %s
                 LIMIT 1
@@ -203,11 +203,12 @@ class S3Transfer:
             
             # Extract metadata from database
             district_raw = result['chrdistrict']
+            district_english = result['chrdistrictenglish']
             sro_raw = result['chrsro']
             year = result['chryear']
             
-            # Map district for S3 path and convert SRO spaces to underscores
-            district = map_district(district_raw)
+            # Use English district if available, otherwise map the Marathi district
+            district = district_english.replace(" ", "_") if district_english else map_district(district_raw)
             sro = sro_raw.replace(" ", "_")
             
             logger.info(f"Retrieved metadata from DB for do_id {do_id}: district={district}, sro={sro}, year={year}")
@@ -280,7 +281,7 @@ class S3Transfer:
 
 
 def main():
-    SOURCE_DIR = "/home/caypro/Documents/real_estate_existing_data_handler/ongoing"
+    SOURCE_DIR = "/home/caypro/Documents/supremePdfMapper/samepl/restructured_data"
     BUCKET_NAME = "calyso"
     
     if not os.path.exists(SOURCE_DIR):
