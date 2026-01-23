@@ -88,17 +88,17 @@ def check_duplicate_ongoing(cursor, chrdistrict, chrsro, intstartrange, intendra
     result = cursor.fetchone()
     return result[0] if result else None
 
-def insert_ongoing_docno(cursor, chrdistrict, chrsro, intstartrange, intendrange, chryear):
+def insert_ongoing_docno(cursor, chrdistrict, chrdistrictenglish, chrsro, intstartrange, intendrange, chryear):
     """
     Insert a new record into tblongoingdocno and return the generated intongoingid.
     """
     query = """
         INSERT INTO tblongoingdocno 
-        (chrdistrict, chrsro, intstartrange, intendrange, chryear, chrip, enmstatus, dtmaddedon, dtmupdatedon)
-        VALUES (%s, %s, %s, %s, %s, NULL, 'Completed Webhook Recieved', NOW(), NOW())
+        (chrdistrict, chrdistrictenglish, chrsro, intstartrange, intendrange, chryear, chrip, enmstatus, dtmaddedon, dtmupdatedon)
+        VALUES (%s, %s, %s, %s, %s, %s, NULL, 'Completed Webhook Recieved', NOW(), NOW())
         RETURNING intongoingid
     """
-    cursor.execute(query, (chrdistrict, chrsro, intstartrange, intendrange, chryear))
+    cursor.execute(query, (chrdistrict, chrdistrictenglish, chrsro, intstartrange, intendrange, chryear))
     result = cursor.fetchone()
     return result[0]
 
@@ -216,8 +216,8 @@ def process_batch_with_db(conn, batch_id, batch_data, meta, copy_count_ref):
             is_new_parent = False
         else:
             # Step 2: Insert new record into tblongoingdocno
-            intongoingid = insert_ongoing_docno(cursor, chrdistrict_mapped, chrsro_mapped,
-                                               range_min, range_max, year)
+            intongoingid = insert_ongoing_docno(cursor, chrdistrict_mapped, CHRDISTRICT_ENGLISH_CONST,
+                                               chrsro_mapped, range_min, range_max, year)
             logger.info(f"Created new intongoingid: {intongoingid} for batch {batch_id}")
             is_new_parent = True
         
