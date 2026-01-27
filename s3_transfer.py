@@ -3,12 +3,11 @@ import re
 import subprocess
 import time
 
-import logging
-import datetime
 import traceback
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
+from logger_config import logger, log_time
 
 # Load environment variables
 load_dotenv()
@@ -63,16 +62,7 @@ except ImportError:
             "doc_no": doc_no
         }
 
-# Configure Logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("s3_transfer.log"),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
+# Logger is now imported from logger_config
 
 class S3Transfer:
     def __init__(self, bucket_name, db_conn=None, dry_run=False):
@@ -103,13 +93,13 @@ class S3Transfer:
             str: New filename with timestamp
         """
         try:
-            timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+            timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
             new_filename = f"{diary_no}_{timestamp}.html"
-            print("Generated timestamped HTML name: %s", new_filename)
+            logger.info(f"Generated timestamped HTML name: {new_filename}")
             return new_filename
 
         except Exception as e:
-            print("Error generating timestamped name for CNR %s: %s", diary_no, e)
+            logger.error(f"Error generating timestamped name for CNR {diary_no}: {e}")
             return f"{diary_no}.html"  # Fallback to original format
 
     def list_s3_files(self, s3_base_path):
@@ -123,10 +113,11 @@ class S3Transfer:
             # Extract file names from s3cmd output
             return set(re.findall(r'\s+(\S+)$', result.stdout, re.MULTILINE))
         else:
-            print("Failed to list S3 directory: %s", result.stderr)
+            logger.error(f"Failed to list S3 directory: {result.stderr}")
             return set()
 
 
+    @log_time
     def transfer_file_to_s3(self, local_file_path, s3_destination_path, max_retries=3):
         """
         Transfer a single file to S3 with retry mechanism.
@@ -141,29 +132,29 @@ class S3Transfer:
         """
         for attempt in range(1, max_retries + 1):
             try:
-                print("Attempt %d: Transferring %s to %s",
-                                  attempt, local_file_path, s3_destination_path)
+                logger.info(f"Attempt {attempt}: Transferring {local_file_path} to {s3_destination_path}")
 
                 result = subprocess.run([
                     "s3cmd", "put", local_file_path, s3_destination_path
                 ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
                 if result.returncode == 0:
-                    print("Successfully transferred file on attempt %d", attempt)
+                    logger.info(f"Successfully transferred file on attempt {attempt}")
                     return True
                 else:
-                    print("Transfer failed on attempt %d: %s", attempt, result.stderr)
+                    logger.error(f"Transfer failed on attempt {attempt}: {result.stderr}")
 
             except Exception as e:
-                print("Transfer attempt %d failed with exception: %s", attempt, e)
+                logger.error(f"Transfer attempt {attempt} failed with exception: {e}")
 
             if attempt < max_retries:
                 time.sleep(2)  # Wait before retry
 
-        print("Failed to transfer file after %d attempts: %s", max_retries, local_file_path)
+        logger.error(f"Failed to transfer file after {max_retries} attempts: {local_file_path}")
         return False
 
 
+    @log_time
     def transfer_folder_to_s3(self, folder_path, diary_no, do_id):
         """
         Transfer entire folder to S3 with proper structure and verification.
@@ -214,11 +205,10 @@ class S3Transfer:
             logger.info(f"Retrieved metadata from DB for do_id {do_id}: district={district}, sro={sro}, year={year}")
 
             s3_base_path = f"s3://calyso/marshaltestrealestate/{district}/{sro}/{year}/{do_id}/{folder_name}/"
-            print("Starting S3 transfer for CNR %s to path: %s", diary_no, s3_base_path)
+            logger.info(f"Starting S3 transfer for CNR {diary_no} to path: {s3_base_path}")
 
-            # Get all files in the folder
             if not os.path.exists(folder_path):
-                print("Source folder does not exist: %s", folder_path)
+                logger.error(f"Source folder does not exist: {folder_path}")
                 return False, None, None
 
             files_to_transfer = []
@@ -235,7 +225,7 @@ class S3Transfer:
 
                     files_to_transfer.append((local_file_path, s3_file_path))
 
-            print("Found %d files to transfer for CNR %s", len(files_to_transfer), diary_no)
+            logger.info(f"Found {len(files_to_transfer)} files to transfer for CNR {diary_no}")
 
             # Transfer each file with retry mechanism
             successful_transfers = 0
@@ -253,39 +243,37 @@ class S3Transfer:
 
             verification_failures = []
             for local_file, s3_destination in files_to_transfer:
-                print(f"local_file: {local_file}")
-                print(f"s3_destination: {s3_destination}")
+                logger.debug(f"local_file: {local_file}")
+                logger.debug(f"s3_destination: {s3_destination}")
                 if local_file not in failed_files:
                     s3_file_name = s3_destination
                     if s3_file_name not in s3_files:
                         verification_failures.append(s3_file_name)
 
-            # Check if transfer was successful
             total_files = len(files_to_transfer)
             if successful_transfers == total_files and len(verification_failures) == 0:
-                print("Successfully transferred and verified all %d files for CNR %s",
-                                 total_files, diary_no)
+                logger.info(f"Successfully transferred and verified all {total_files} files for CNR {diary_no}")
                 return True, s3_base_path, s3_html_file_path
             else:
-                print("Transfer incomplete for CNR %s: %d/%d successful, %d verification failures",
-                                  diary_no, successful_transfers, total_files, len(verification_failures))
-                print("Failed files: %s", failed_files)
-                print("Verification failures: %s", verification_failures)
+                logger.error(f"Transfer incomplete for CNR {diary_no}: {successful_transfers}/{total_files} successful, {len(verification_failures)} verification failures")
+                logger.error(f"Failed files: {failed_files}")
+                logger.error(f"Verification failures: {verification_failures}")
                 return False, s3_base_path, s3_html_file_path
 
         except Exception as e:
-            print("Error in S3 transfer for CNR %s: %s", diary_no, e)
-            print(traceback.format_exc())
+            logger.error(f"Error in S3 transfer for CNR {diary_no}: {e}")
+            logger.error(traceback.format_exc())
             return False, None, None
 
 
 
+@log_time
 def main():
     SOURCE_DIR = "/home/caypro/Documents/supremePdfMapper/samepl/restructured_data"
     BUCKET_NAME = "calyso"
     
     if not os.path.exists(SOURCE_DIR):
-        print(f"Source directory not found: {SOURCE_DIR}")
+        logger.error(f"Source directory not found: {SOURCE_DIR}")
         return
 
     # Establish database connection
@@ -306,11 +294,11 @@ def main():
     except ValueError:
         do_ids = [d for d in os.listdir(SOURCE_DIR) if os.path.isdir(os.path.join(SOURCE_DIR, d))]
 
-    print(f"Found {len(do_ids)} batches (do_ids) to process.")
+    logger.info(f"Found {len(do_ids)} batches (do_ids) to process.")
 
     for do_id in do_ids:
         do_id_path = os.path.join(SOURCE_DIR, do_id)
-        print(f"\nProcessing Batch (do_id): {do_id}")
+        logger.info(f"\nProcessing Batch (do_id): {do_id}")
 
         # Iterate through case folders inside the do_id folder
         case_folders = os.listdir(do_id_path)
@@ -326,9 +314,9 @@ def main():
             success, s3_path, html_path = uploader.transfer_folder_to_s3(case_path, cnr_no, do_id)
 
             if success:
-                print(f"[SUCCESS] {case_folder} -> {s3_path}")
+                logger.info(f"[SUCCESS] {case_folder} -> {s3_path}")
             else:
-                print(f"[FAILED] {case_folder}")
+                logger.error(f"[FAILED] {case_folder}")
     
     # Close database connection
     db_conn.close()
