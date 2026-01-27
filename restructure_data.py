@@ -3,18 +3,10 @@ import shutil
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
-import logging
 from datetime import datetime
+from logger_config import logger, log_time
 
-# ============================================================
-# LOGGING CONFIGURATION
-# ============================================================
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-logger = logging.getLogger(__name__)
+# Logger is now imported from logger_config
 
 # ============================================================
 # LOAD ENVIRONMENT VARIABLES
@@ -24,8 +16,10 @@ load_dotenv()
 # ============================================================
 # CONFIGURATION
 # ============================================================
-SOURCE_DIR = "/home/caypro/Documents/supremePdfMapper/samepl/real_estate_"
-DEST_PARENT_DIR = "/home/caypro/Documents/supremePdfMapper/samepl/restructured_data"
+# SOURCE_DIR = "/home/caypro/Documents/supremePdfMapper/samepl/real_estate_"
+SOURCE_DIR = "/home/caypro/Documents/real_estate_existing_data_handler/1"
+# DEST_PARENT_DIR = "/home/caypro/Documents/supremePdfMapper/samepl/restructured_data"
+DEST_PARENT_DIR = "/home/caypro/Documents/real_estate_existing_data_handler/restructure_data"
 BATCH_SIZE = 2000
 
 # constant english district value required by you
@@ -182,6 +176,7 @@ def parse_folder_name(folder_name):
 # ============================================================
 # PROCESS BATCH WITH DATABASE
 # ============================================================
+@log_time
 def process_batch_with_db(conn, batch_id, batch_data, meta, copy_count_ref):
     """
     Process a single batch:
@@ -342,6 +337,7 @@ def process_batch_with_db(conn, batch_id, batch_data, meta, copy_count_ref):
 # ============================================================
 # MAIN PROCESS
 # ============================================================
+@log_time
 def main():
     logger.info("=" * 80)
     logger.info("Starting restructure with database integration...")
